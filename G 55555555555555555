@@ -1,0 +1,105 @@
+### Шаг 1: Создание инстансов **Cloud-BACKUP01** и **Cloud-BACKUP02**
+Для создания инстансов с нужными параметрами (1 vCPU, 1 ГБ RAM, 10 ГБ диска, 5 ГБ дополнительный том):
+
+1. **Пример команды для создания инстанса** (используйте команду для вашего облачного провайдера):
+   ```bash
+   # Для Cloud-BACKUP01
+   create_vm --name Cloud-BACKUP01 --cpu 1 --ram 1024 --disk 10 --additional-disk 5 --os alt-p10-cloud-x86_64
+
+   # Для Cloud-BACKUP02
+   create_vm --name Cloud-BACKUP02 --cpu 1 --ram 1024 --disk 10 --additional-disk 5 --os alt-p10-cloud-x86_64
+   ```
+
+### Шаг 2: Установка Кибер Бекапа 17 версии
+#### На инстансах **Cloud-ADM**, **Cloud-BACKUP01**, **Cloud-BACKUP02** установите Кибер Бекап:
+
+1. **Установка Кибер Бекап на инстанс Cloud-ADM (сервер управления)**:
+   - Скачать и установить пакет Кибер Бекап 17 для **AltLinux** с официального репозитория.
+     ```bash
+     sudo apt-get update
+     sudo apt-get install cyberbackup-17
+     ```
+   - Запустите сервис:
+     ```bash
+     sudo systemctl start cyberbackup
+     sudo systemctl enable cyberbackup
+     ```
+
+2. **Настройка организации (отдел) AU_Team**:
+   - Запустите конфигурацию Кибер Бекапа:
+     ```bash
+     sudo cyberbackup-configure
+     ```
+   - Следуйте инструкциям для создания организации с именем **AU_Team**.
+
+3. **Настройка пользователя au-admin**:
+   - Используйте команду для создания пользователя **au-admin** с паролем **P@ssw0rd** и правами администратора:
+     ```bash
+     sudo cyberbackup-useradd --name au-admin --password P@ssw0rd --role admin
+     ```
+
+4. **Настройка инстансов Cloud-BACKUP01 и Cloud-BACKUP02 как узлов хранилища**:
+   - Для каждого инстанса нужно зарегистрировать их как узлы хранилища на сервере управления Кибер Бекап:
+     ```bash
+     sudo cyberbackup-nodeadd --node BACKUP01 --host Cloud-BACKUP01
+     sudo cyberbackup-nodeadd --node BACKUP02 --host Cloud-BACKUP02
+     ```
+
+### Шаг 3: Настройка устройства хранения на Cloud-BACKUP01 и Cloud-BACKUP02
+#### 1. Подключение блочного устройства `sdb` в формат **xfs**:
+   - На инстансе **Cloud-BACKUP01**:
+     ```bash
+     # Форматирование устройства sdb
+     sudo mkfs.xfs /dev/sdb
+     
+     # Монтирование в /backups
+     sudo mkdir /backups
+     sudo mount /dev/sdb /backups
+     
+     # Добавление в /etc/fstab для автоматического монтирования при старте
+     echo '/dev/sdb /backups xfs defaults 0 0' | sudo tee -a /etc/fstab
+     ```
+
+   - Повторите эти действия на **Cloud-BACKUP02**.
+
+#### 2. Регистрация устройств хранения в Кибер Бекапе:
+   - Зарегистрируйте устройства как узлы хранения в Кибер Бекапе:
+     ```bash
+     sudo cyberbackup-nodeadd --node BACKUP01 --mountpoint /backups --host Cloud-BACKUP01
+     sudo cyberbackup-nodeadd --node BACKUP02 --mountpoint /backups --host Cloud-BACKUP02
+     ```
+
+### Шаг 4: Создание плана резервного копирования для инстанса **Cloud-ADM**
+1. **Создание плана резервного копирования для домашней директории пользователя altlinux**:
+   - На сервере управления Кибер Бекап, создайте план резервного копирования для **/home/altlinux** на **BACKUP01**:
+     ```bash
+     sudo cyberbackup-planadd --name "Backup altlinux" --source /home/altlinux --destination BACKUP01
+     ```
+
+2. **Запуск резервного копирования**:
+   - Выполните резервное копирование:
+     ```bash
+     sudo cyberbackup-backup --plan "Backup altlinux"
+     ```
+
+### Шаг 5: Создание плана репликации резервной копии
+1. **Создание плана репликации** для домашней директории пользователя **altlinux**:
+   - На сервере управления Кибер Бекап создайте план репликации для **BACKUP01** на **BACKUP02**:
+     ```bash
+     sudo cyberbackup-replicationadd --source BACKUP01 --destination BACKUP02 --plan "Backup altlinux"
+     ```
+
+2. **Запуск репликации**:
+   - Выполните репликацию резервной копии:
+     ```bash
+     sudo cyberbackup-replication --plan "Backup altlinux"
+     ```
+
+### Резюме действий:
+- Вы создали инстансы **Cloud-BACKUP01** и **Cloud-BACKUP02** с нужными параметрами.
+- Установили и настроили Кибер Бекап на **Cloud-ADM** и двух хранилищах.
+- Настроили устройства хранения на **BACKUP01** и **BACKUP02**.
+- Создали план резервного копирования для домашней директории пользователя **altlinux**.
+- Создали план репликации резервной копии с **BACKUP01** на **BACKUP02**.
+
+Теперь ваша инфраструктура готова к выполнению регулярных резервных копий с использованием Кибер Бекап, а также репликации этих данных для повышения отказоустойчивости.
