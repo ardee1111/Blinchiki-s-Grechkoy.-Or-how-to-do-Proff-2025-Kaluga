@@ -1,0 +1,4 @@
+Действие		AltLinux		EcoRouter
+Пингуем другой хост	ping 192.168.1.1	ping ip 192.168.1.1
+Проверка маршрутов	ip r			show ip route
+Проверка интерфейсов	ip a			show interface brief
