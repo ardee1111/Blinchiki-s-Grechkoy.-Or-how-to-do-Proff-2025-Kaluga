@@ -26,3 +26,13 @@ show interface, show ip route, ping ip ...
 show vrf
 show ip route vrf <name>
 ping vrf <name> <ip>
+Статическая:
+В AltLinux: ip route add, или /etc/network/interfaces
+
+В EcoRouter: ip route, ip route vrf
+
+# AltLinux
+ip route add 192.168.30.0/24 via 192.168.20.1
+
+# EcoRouter
+ip route 192.168.30.0 255.255.255.0 192.168.20.1
