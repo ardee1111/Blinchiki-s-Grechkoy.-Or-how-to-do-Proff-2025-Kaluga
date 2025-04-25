@@ -1,0 +1,138 @@
+### **Настройка L2TP/IPSec VPN на Ideco NGFW (FW)**
+
+#### **1. Настройка сервера VPN на FW (HQ)**
+1. **Включение сервиса VPN**:
+   - Перейдите: **`VPN` → `L2TP/IPSec` → `Настройки сервера`**
+   - Активируйте **L2TP/IPSec Server**
+
+2. **Конфигурация параметров**:
+   ```bash
+   - Подсеть для клиентов: 10.128.0.0/24
+   - Диапазон адресов: 10.128.0.100-10.128.0.200
+   - DNS-сервер: 192.168.1.1 (локальный DNS FW)
+   - MTU: 1400 (оптимально для PPP)
+   ```
+
+3. **Настройка IPSec**:
+   ```bash
+   - Pre-Shared Key (PSK): P@ssw0rd123
+   - Шифрование: AES-256 + SHA-256
+   - PFS: Group 14 (2048 бит)
+   - NAT-Traversal: Включен
+   ```
+
+4. **Создание пользователя VPN**:
+   - Перейдите: **`Пользователи` → `Локальные пользователи`**
+   - Добавьте:
+     ```bash
+     - Логин: vpn
+     - Пароль: P@ssw0rd123
+     - Группа: VPN_Users
+     - Разрешенные сервисы: L2TP/IPSec
+     ```
+
+5. **Правила доступа**:
+   - Разрешите доступ к CLI-DT (192.168.1.0/24):
+     ```bash
+     - Источник: 10.128.0.0/24
+     - Назначение: 192.168.1.0/24
+     - Сервис: ANY
+     - Действие: Разрешить
+     ```
+
+---
+
+#### **2. Настройка клиента VPN на CLI-HQ (Альт Рабочая станция 10)**
+1. **Установка зависимостей**:
+   ```bash
+   sudo apt install network-manager-l2tp
+   ```
+
+2. **Создание подключения**:
+   ```bash
+   nmcli connection add \
+       con-name "VPN-to-FW" \
+       type vpn \
+       vpn-type l2tp \
+       vpn.data \
+           "gateway=fw.au.team, \
+           user=vpn, \
+           password-flags=1, \
+           ipsec-enabled=yes, \
+           ipsec-psk=P@ssw0rd123, \
+           mru=1400, mtu=1400"
+   ```
+
+3. **Настройка IPSec**:
+   ```bash
+   sudo nano /etc/ipsec.conf
+   ```
+   Добавьте:
+   ```ini
+   conn VPN-to-FW
+       authby=secret
+       left=%defaultroute
+       leftprotoport=17/1701
+       right=fw.au.team
+       rightprotoport=17/1701
+       ike=aes256-sha256-modp2048!
+       esp=aes256-sha256!
+       keyingtries=3
+       ikelifetime=8h
+       salifetime=1h
+       pfs=yes
+       auto=start
+   ```
+
+4. **Файл PSK**:
+   ```bash
+   sudo nano /etc/ipsec.secrets
+   ```
+   Добавьте:
+   ```bash
+   : PSK "P@ssw0rd123"
+   ```
+
+5. **Запуск VPN**:
+   ```bash
+   sudo systemctl restart strongswan
+   nmcli connection up VPN-to-FW
+   ```
+
+---
+
+#### **3. Проверка подключения**
+1. **На сервере**:
+   ```bash
+   tail -f /var/log/syslog | grep pluto
+   ```
+
+2. **На клиенте**:
+   ```bash
+   ip a show dev ppp0
+   ping 192.168.1.10 (CLI-DT)
+   ```
+
+---
+
+#### **4. Устранение неполадок**
+| Проблема | Решение |
+|----------|---------|
+| Нет подключения | Проверить: <br>- Доступность fw.au.team <br>- Совпадение PSK <br>- Открытые порты (UDP 500, 4500, 1701) |
+| Медленная скорость | Уменьшить MTU до 1300, отключить PFS |
+| Разрывы соединения | Увеличить `ikelifetime` до 24h |
+
+---
+
+#### **5. Дополнительные рекомендации**
+1. **Резервирование**:
+   - Настройте второй VPN-сервер на FW-DT
+2. **Мониторинг**:
+   ```bash
+   vpncmd /server localhost /adminhub /cmd SessionList
+   ```
+3. **Безопасность**:
+   - Меняйте PSK раз в месяц
+   - Используйте сертификаты вместо PSK (при возможности)
+
+> **Важно**: Для работы доменного имени `fw.au.team` должен быть корректно настроен DNS. В тестовой среде можно использовать IP-адрес напрямую.
