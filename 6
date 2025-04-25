@@ -1,0 +1,135 @@
+### **Настройка OSPF между устройствами**
+
+#### **Общие параметры для всех OSPF-сегментов:**
+- **ID процесса OSPF**: `1`  
+- **Area**: `0` (Backbone)  
+- **Аутентификация**: `MD5` с ключом `P@ssw0rd`  
+- **Passive Interfaces**: Все интерфейсы, кроме тех, где требуется OSPF.  
+
+---
+
+## **a. Настройка OSPF между R-DT (EcoRouter) и FW-DT (Ideco NGFW)**
+### **1. На R-DT:**
+```bash
+configure terminal
+router ospf 1
+  router-id 1.1.1.1
+  area 0 authentication message-digest
+  network 192.168.1.0 0.0.0.255 area 0  # LAN сеть
+  network 10.10.10.0 0.0.0.3 area 0     # GRE-туннель (если есть)
+  passive-interface default              # Блокировка OSPF на всех интерфейсах по умолчанию
+  no passive-interface eth1              # Разрешение OSPF только на интерфейсе к FW-DT (eth1)
+exit
+interface eth1
+  ip ospf authentication message-digest
+  ip ospf message-digest-key 1 md5 P@ssw0rd
+exit
+write memory
+```
+
+### **2. На FW-DT:**
+1. **В веб-интерфейсе Ideco NGFW**:  
+   - Перейдите в **`Маршрутизация` → `OSPF`**.  
+   - **Основные настройки**:  
+     - **Router ID**: `2.2.2.2`  
+     - **Area ID**: `0`  
+     - **Аутентификация**: `MD5`  
+     - **Ключ**: `P@ssw0rd`  
+   - **Интерфейсы**:  
+     - Активируйте OSPF на интерфейсе, подключенном к `R-DT` (например, `eth1`).  
+     - Укажите сеть: `192.168.1.0/24` (LAN FW-DT).  
+   - **Passive Interfaces**:  
+     - Отключите OSPF на всех интерфейсах, кроме `eth1`.  
+
+---
+
+## **b. Настройка OSPF между R-DT и R-HQ (через GRE-туннель)**
+### **1. На R-DT:**
+```bash
+configure terminal
+router ospf 1
+  network 10.10.10.0 0.0.0.3 area 0     # GRE-туннель
+  no passive-interface Tunnel1           # Разрешение OSPF только на туннеле
+exit
+interface Tunnel1
+  ip ospf authentication message-digest
+  ip ospf message-digest-key 1 md5 P@ssw0rd
+exit
+write memory
+```
+
+### **2. На R-HQ:**
+```bash
+configure terminal
+router ospf 1
+  router-id 3.3.3.3
+  network 10.10.10.0 0.0.0.3 area 0     # GRE-туннель
+  network 192.168.2.0 0.0.0.255 area 0  # LAN сеть HQ
+  no passive-interface Tunnel1          # Разрешение OSPF только на туннеле
+exit
+interface Tunnel1
+  ip ospf authentication message-digest
+  ip ospf message-digest-key 1 md5 P@ssw0rd
+exit
+write memory
+```
+
+---
+
+## **c. Настройка OSPF между FW и FW-DT (через GRE over IPSec)**
+### **1. На FW (HQ):**
+1. **В веб-интерфейсе Ideco NGFW**:  
+   - **Router ID**: `4.4.4.4`  
+   - **Area ID**: `0`  
+   - **Аутентификация**: `MD5`, ключ `P@ssw0rd`.  
+   - **Интерфейсы**:  
+     - Активируйте OSPF на GRE-интерфейсе (`tun0`).  
+     - Укажите сеть: `10.10.0.0/30` (GRE-подсеть).  
+   - **Passive Interfaces**:  
+     - Отключите OSPF на всех интерфейсах, кроме `tun0`.  
+
+### **2. На FW-DT:**
+1. **Аналогично FW**:  
+   - **Router ID**: `5.5.5.5`  
+   - **Аутентификация**: `MD5`, ключ `P@ssw0rd`.  
+   - **Интерфейсы**:  
+     - Активируйте OSPF на `tun0` (GRE).  
+
+---
+
+## **Проверка работы OSPF**
+### **1. На маршрутизаторах (EcoRouter):**
+```bash
+show ip ospf neighbor  # Должны отображаться соседи.
+show ip route          # Должны быть маршруты OSPF.
+```
+
+### **2. На межсетевых экранах (Ideco NGFW):**
+- В разделе **`Мониторинг` → `OSPF`** проверьте:  
+  - **Соседи**: `Full`-состояние.  
+  - **Таблица маршрутизации**: наличие сетей из соседних устройств.  
+
+---
+
+## **Защита OSPF**
+1. **Аутентификация MD5**:  
+   - Все устройства используют ключ `P@ssw0rd`.  
+2. **Passive Interfaces**:  
+   - OSPF включен только на необходимых интерфейсах.  
+3. **Фильтрация маршрутов**:  
+   - На Ideco NGFW можно добавить **Access-List** для фильтрации OSPF-соседей.  
+
+---
+
+## **Итоговая схема OSPF-взаимодействия**
+```
+[R-DT] --(OSPF)--> [FW-DT]  
+[R-DT] --(OSPF через GRE)--> [R-HQ]  
+[FW] --(OSPF через GRE/IPSec)--> [FW-DT]  
+```
+- Все маршруты динамически обновляются.  
+- Трафик защищен аутентификацией.  
+
+Если есть проблемы, проверьте:  
+- **Соседство OSPF**: `show ip ospf neighbor`.  
+- **Разрешен ли OSPF (TCP 89)** на межсетевых экранах.
