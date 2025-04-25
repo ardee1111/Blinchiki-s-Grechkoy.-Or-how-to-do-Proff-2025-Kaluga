@@ -1,0 +1,120 @@
+### **Настройка Ideco Client для локального и удаленного доступа**
+
+---
+
+#### **a. Установка Ideco Client на CLI (локальная сеть DT)**
+
+1. **Установка клиента**:
+   - Скачайте Ideco Client с официального сайта (`https://ideco.ru`).
+   - Установите пакет:
+     ```bash
+     sudo dpkg -i ideco-client.deb  # Для Alt Linux 10
+     ```
+
+2. **Создание профилей**:
+
+   **Профиль "User"** (для пользователя `user`):
+   ```bash
+   sudo nano /etc/ideco/client-profiles/user.conf
+   ```
+   Содержимое:
+   ```ini
+   [Profile]
+   Name=User
+   Server=fw.au.team
+   Username=user
+   Password=P@ssw0rd123
+   AutoConnect=true
+   ```
+
+   **Профиль "Super"** (для пользователя `superuser`):
+   ```bash
+   sudo nano /etc/ideco/client-profiles/super.conf
+   ```
+   Содержимое:
+   ```ini
+   [Profile]
+   Name=Super
+   Server=fw.au.team
+   Username=superuser
+   Password=P@ssw0rd123
+   AutoConnect=true
+   ```
+
+3. **Запуск клиента**:
+   ```bash
+   sudo systemctl start ideco-client
+   ```
+
+---
+
+#### **b. Установка Ideco Client на CLI-HQ (внешняя сеть)**
+
+1. **Установка клиента** (аналогично CLI).
+
+2. **Создание профиля "VPN"**:
+   ```bash
+   sudo nano /etc/ideco/client-profiles/vpn.conf
+   ```
+   Содержимое:
+   ```ini
+   [Profile]
+   Name=VPN
+   Server=fw.au.team
+   Username=vpn
+   Password=P@ssw0rd123
+   AutoConnect=true
+   VPNEnabled=true  # Активация VPN-режима
+   ```
+
+3. **Дополнительные настройки VPN**:
+   - Убедитесь, что на FW разрешены подключения из внешней сети:
+     - **Порт**: 443 (HTTPS) или 10443 (альтернативный).
+     - **Правило доступа**: Разрешить `CLI-HQ` → `FW` (TCP 443).
+
+---
+
+#### **c. Проверка авторизации**
+
+| Устройство | Профиль | Действия |
+|------------|---------|----------|
+| **CLI** (локальная сеть) | `User` | 1. Выберите профиль "User".<br>2. Проверьте доступ в Интернет (`ping 8.8.8.8`). |
+|  | `Super` | 1. Переключитесь на профиль "Super".<br>2. Убедитесь, что скорость выше (30 Мбит/с). |
+| **CLI-HQ** (внешняя сеть) | `VPN` | 1. Подключитесь через профиль "VPN".<br>2. Проверьте доступ к `CLI-DT` (`ping 192.168.1.10`). |
+
+---
+
+#### **4. Логирование и отладка**
+
+1. **Просмотр логов**:
+   ```bash
+   journalctl -u ideco-client -f  # Linux
+   ```
+
+2. **Ошибки и решения**:
+   | Ошибка | Решение |
+   |--------|---------|
+   | `Connection refused` | Проверьте, запущен ли сервис на FW (`systemctl status ideco-server`). |
+   | `Invalid credentials` | Убедитесь, что пароли совпадают с настройками на FW. |
+   | `VPN tunnel failed` | Проверьте, открыты ли порты на FW (443, 10443). |
+
+---
+
+#### **5. Оптимизация (дополнительно)**
+
+1. **Автозапуск профилей**:
+   ```bash
+   sudo crontab -e
+   ```
+   Добавьте:
+   ```bash
+   @reboot /usr/bin/ideco-client --profile=User
+   ```
+
+2. **Безопасность**:
+   - Шифруйте файлы профилей:
+     ```bash
+     sudo gpg --encrypt /etc/ideco/client-profiles/*.conf
+     ```
+
+> **Готово!** Теперь пользователи могут подключаться к сети через Ideco Client с разным уровнем доступа. Для внешних подключений используйте VPN-профиль.
