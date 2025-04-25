@@ -1,7 +1,0 @@
-Названия ВМ	Proxmox: список ВМ	Да
-Сетевые интерфейсы и bridge	ip a, brctl show, nmcli d	Да
-Назначение IP	ip a, ip r, ping	Да
-Работа сети	ping, traceroute	Да
-Настройка VLAN (если есть)	ip -d link show, bridge vlan show	Да
-Назначения hostname	hostname, hostnamectl	Да	  
-EcoRouter CLI	show interface, show running-config	Да
